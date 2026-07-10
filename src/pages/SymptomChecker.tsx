@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { submitAssessment } from '../lib/assessmentHelpers';
 import {
   User,
   MessageSquare,
@@ -888,7 +890,10 @@ export default function SymptomChecker() {
   const [animating, setAnimating] = useState(false);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const routerNavigate = useNavigate();
 
   const navigate = (next: number) => {
     if (animating) return;
@@ -912,8 +917,32 @@ export default function SymptomChecker() {
     return true;
   };
 
-  const handleSubmit = () => {
-    setSubmitted(true);
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const result = await submitAssessment(form);
+      routerNavigate('/results', {
+        state: {
+          assessmentId: result.assessmentId,
+          healthScore: result.healthScore,
+          bmi: result.bmi,
+          riskLevel: result.riskLevel,
+          condition: result.condition,
+          confidence: result.confidence,
+          recommendations: result.recommendations,
+          symptoms: form.symptoms,
+          fullName: form.personal.fullName,
+          age: form.personal.age,
+          gender: form.personal.gender,
+        },
+      });
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : 'Submission failed. Please try again.');
+      setSubmitted(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const TOTAL = STEPS.length;
@@ -936,38 +965,7 @@ export default function SymptomChecker() {
     'Take a moment to verify everything before we analyze your health profile.',
   ];
 
-  if (submitted) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-emerald-50/50 via-white to-teal-50/50 pt-20 pb-16 flex items-center justify-center px-4">
-        <div className="max-w-md w-full text-center space-y-6 animate-slideUp">
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center mx-auto shadow-xl shadow-emerald-300/40">
-            <Check className="w-10 h-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Assessment Submitted!</h2>
-            <p className="text-gray-500 mt-2 text-sm">
-              Thank you, <strong>{form.personal.fullName || 'there'}</strong>. Your health assessment has been recorded.
-              Our AI is analyzing your profile.
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button
-              onClick={() => { setSubmitted(false); setStep(0); setForm(INITIAL_FORM); }}
-              className="px-6 py-3 rounded-xl border-2 border-emerald-500 text-emerald-600 font-semibold text-sm hover:bg-emerald-50 transition-all"
-            >
-              Start New Assessment
-            </button>
-            <button
-              onClick={() => { setSubmitted(false); setStep(5); }}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-sm shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:shadow-emerald-500/40 transition-all"
-            >
-              Back to Review
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (submitted) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/50 via-white to-teal-50/50 pt-20 pb-16">
@@ -1074,15 +1072,35 @@ export default function SymptomChecker() {
               <button
                 type="button"
                 onClick={handleSubmit}
+                disabled={isSubmitting}
                 className="inline-flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold text-sm
-                  shadow-md shadow-emerald-500/25 hover:shadow-lg hover:shadow-emerald-500/35 transition-all"
+                  shadow-md shadow-emerald-500/25 hover:shadow-lg hover:shadow-emerald-500/35 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Check className="w-4 h-4" />
-                <span>Submit Assessment</span>
+                {isSubmitting ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Submit Assessment</span>
+                  </>
+                )}
               </button>
             )}
           </div>
         </div>
+
+        {submitError && (
+          <div className="mt-4 flex items-start space-x-2 text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm">
+            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>{submitError}</span>
+          </div>
+        )}
 
       </div>
     </div>

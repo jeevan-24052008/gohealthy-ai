@@ -2,104 +2,35 @@ import { useState, useEffect } from 'react';
 import { Activity, Users, BarChart3, AlertCircle, TrendingUp } from 'lucide-react';
 import Card from '../components/Card';
 import {
-  getAssessments,
-  getAssessmentStats,
-  getSymptomCounts,
-} from '../lib/storage';
-
-interface Assessment {
-  id: string;
-  patient_name: string;
-  patient_age: number;
-  patient_gender: string;
-  condition_name: string;
-  confidence_score: number;
-  health_score: number;
-  symptoms: string[];
-  created_at: string;
-}
+  getDashboardStats,
+  getSymptomCountsFromDB,
+  getRecentAssessments,
+  type DashboardStats,
+  type SymptomCount,
+  type RecentAssessmentRow,
+} from '../lib/assessmentHelpers';
 
 const Dashboard = () => {
-  const [stats, setStats] = useState([
-    { label: 'Total Assessments', value: '0', icon: Activity, trend: 'Loading...', color: 'emerald' },
-    { label: 'Total Users', value: '0', icon: Users, trend: 'Loading...', color: 'blue' },
-    { label: 'Avg Health Score', value: '0', icon: TrendingUp, trend: 'Loading...', color: 'amber' },
-    { label: 'Most Common', value: 'N/A', icon: AlertCircle, trend: 'Condition', color: 'rose' },
-  ]);
-  const [symptomsData, setSymptomsData] = useState<
-    { name: string; count: number; percentage: number }[]
-  >([]);
-  const [recentAssessments, setRecentAssessments] = useState<
-    { id: string; patient: string; age: number; condition: string; score: number; date: string }[]
-  >([]);
+  const [dashStats, setDashStats] = useState<DashboardStats | null>(null);
+  const [symptomsData, setSymptomsData] = useState<SymptomCount[]>([]);
+  const [recentAssessments, setRecentAssessments] = useState<RecentAssessmentRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  const weeklyData = [
-    { day: 'Mon', assessments: 45 },
-    { day: 'Tue', assessments: 52 },
-    { day: 'Wed', assessments: 38 },
-    { day: 'Thu', assessments: 65 },
-    { day: 'Fri', assessments: 78 },
-    { day: 'Sat', assessments: 42 },
-    { day: 'Sun', assessments: 35 },
-  ];
-
-  const maxAssessments = Math.max(...weeklyData.map((d) => d.assessments));
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [assessmentStats, symptomCounts, assessments] = await Promise.all([
-          getAssessmentStats(),
-          getSymptomCounts(),
-          getAssessments(),
+        const [stats, symptoms, recent] = await Promise.all([
+          getDashboardStats(),
+          getSymptomCountsFromDB(),
+          getRecentAssessments(10),
         ]);
-
-        setStats([
-          {
-            label: 'Total Assessments',
-            value: assessmentStats.totalAssessments.toString(),
-            icon: Activity,
-            trend: '+12%',
-            color: 'emerald',
-          },
-          {
-            label: 'Total Users',
-            value: assessmentStats.totalAssessments.toString(),
-            icon: Users,
-            trend: '+8%',
-            color: 'blue',
-          },
-          {
-            label: 'Avg Health Score',
-            value: assessmentStats.avgHealthScore.toString(),
-            icon: TrendingUp,
-            trend: '+3%',
-            color: 'amber',
-          },
-          {
-            label: 'Most Common',
-            value: assessmentStats.mostCommonCondition,
-            icon: AlertCircle,
-            trend: 'Condition',
-            color: 'rose',
-          },
-        ]);
-
-        setSymptomsData(symptomCounts);
-
-        const recentData = assessments.slice(0, 5).map((a: Assessment) => ({
-          id: a.id,
-          patient: a.patient_name,
-          age: a.patient_age,
-          condition: a.condition_name,
-          score: a.health_score,
-          date: a.created_at.split('T')[0],
-        }));
-
-        setRecentAssessments(recentData);
-      } catch (error) {
-        console.error('Failed to load dashboard data:', error);
+        setDashStats(stats);
+        setSymptomsData(symptoms);
+        setRecentAssessments(recent);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard data.');
+        console.error('Dashboard load error:', err);
       } finally {
         setIsLoading(false);
       }
@@ -107,6 +38,44 @@ const Dashboard = () => {
 
     loadData();
   }, []);
+
+  const stats = dashStats
+    ? [
+        {
+          label: 'Total Assessments',
+          value: dashStats.totalAssessments.toString(),
+          icon: Activity,
+          trend: dashStats.totalAssessments > 0 ? 'All time' : 'No data',
+          color: 'emerald',
+        },
+        {
+          label: 'Total Users',
+          value: dashStats.totalAssessments.toString(),
+          icon: Users,
+          trend: 'Active users',
+          color: 'blue',
+        },
+        {
+          label: 'Avg Health Score',
+          value: dashStats.avgHealthScore > 0 ? `${dashStats.avgHealthScore}/100` : '—',
+          icon: TrendingUp,
+          trend: dashStats.avgHealthScore >= 75 ? 'Good' : dashStats.avgHealthScore >= 50 ? 'Moderate' : dashStats.avgHealthScore > 0 ? 'Needs care' : 'No data',
+          color: 'amber',
+        },
+        {
+          label: 'Most Common',
+          value: dashStats.mostCommonCondition,
+          icon: AlertCircle,
+          trend: 'Condition',
+          color: 'rose',
+        },
+      ]
+    : [
+        { label: 'Total Assessments', value: '—', icon: Activity, trend: 'Loading...', color: 'emerald' },
+        { label: 'Total Users', value: '—', icon: Users, trend: 'Loading...', color: 'blue' },
+        { label: 'Avg Health Score', value: '—', icon: TrendingUp, trend: 'Loading...', color: 'amber' },
+        { label: 'Most Common', value: 'N/A', icon: AlertCircle, trend: 'Condition', color: 'rose' },
+      ];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50/50 via-white to-teal-50/50 pt-24 pb-16">
@@ -117,6 +86,13 @@ const Dashboard = () => {
             Monitor health trends and assessment statistics across the platform.
           </p>
         </div>
+
+        {error && (
+          <div className="mb-6 flex items-center space-x-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl px-5 py-4 text-sm">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -155,7 +131,7 @@ const Dashboard = () => {
                       {stat.trend}
                     </span>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <p className="text-2xl font-bold text-gray-900 truncate">{stat.value}</p>
                   <p className="text-sm text-gray-500">{stat.label}</p>
                 </Card>
               ))}
@@ -175,7 +151,7 @@ const Dashboard = () => {
                       <div key={idx}>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-medium text-gray-700">{symptom.name}</span>
-                          <span className="text-sm text-gray-500">{symptom.count} cases</span>
+                          <span className="text-sm text-gray-500">{symptom.count} case{symptom.count !== 1 ? 's' : ''}</span>
                         </div>
                         <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
                           <div
@@ -198,25 +174,44 @@ const Dashboard = () => {
                   <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
                     <TrendingUp className="w-5 h-5 text-blue-600" />
                   </div>
-                  <h2 className="text-lg font-semibold text-gray-900">Weekly Health Trends</h2>
+                  <h2 className="text-lg font-semibold text-gray-900">Health Score Distribution</h2>
                 </div>
-                <div className="flex items-end justify-between h-48 px-2">
-                  {weeklyData.map((data, idx) => (
-                    <div key={idx} className="flex flex-col items-center flex-1">
-                      <div className="relative w-full flex justify-center mb-2">
-                        <div
-                          className="w-8 rounded-t-lg bg-gradient-to-t from-emerald-500 to-teal-400 transition-all duration-500 hover:from-emerald-600 hover:to-teal-500"
-                          style={{ height: `${(data.assessments / maxAssessments) * 140}px` }}
-                        >
-                          <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 hover:opacity-100 transition-opacity text-xs font-medium text-gray-600 whitespace-nowrap">
-                            {data.assessments}
+                {recentAssessments.length > 0 ? (
+                  <div className="flex items-end justify-between h-48 px-2">
+                    {recentAssessments.slice(0, 7).map((a, idx) => {
+                      const pct = a.score;
+                      const maxH = 140;
+                      const barH = Math.max(8, Math.round((pct / 100) * maxH));
+                      return (
+                        <div key={idx} className="flex flex-col items-center flex-1">
+                          <div className="relative w-full flex justify-center mb-2">
+                            <div
+                              className={`w-8 rounded-t-lg transition-all duration-500 hover:opacity-80 ${
+                                pct >= 75
+                                  ? 'bg-gradient-to-t from-emerald-500 to-teal-400'
+                                  : pct >= 50
+                                  ? 'bg-gradient-to-t from-amber-500 to-yellow-400'
+                                  : 'bg-gradient-to-t from-rose-500 to-red-400'
+                              }`}
+                              style={{ height: `${barH}px` }}
+                            >
+                              <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 opacity-0 hover:opacity-100 transition-opacity text-xs font-medium text-gray-600 whitespace-nowrap">
+                                {pct}
+                              </div>
+                            </div>
                           </div>
+                          <span className="text-xs text-gray-500 font-medium truncate max-w-full px-0.5">
+                            {a.patient.split(' ')[0]}
+                          </span>
                         </div>
-                      </div>
-                      <span className="text-xs text-gray-500 font-medium">{data.day}</span>
-                    </div>
-                  ))}
-                </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">
+                    No score history yet. Complete an assessment to see data here.
+                  </p>
+                )}
               </Card>
             </div>
 
@@ -242,6 +237,9 @@ const Dashboard = () => {
                           Score
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Risk
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                           Date
                         </th>
                       </tr>
@@ -257,7 +255,7 @@ const Dashboard = () => {
                               <span className="font-medium text-gray-900">{assessment.patient}</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-600">{assessment.age}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{assessment.age || '—'}</td>
                           <td className="px-6 py-4">
                             <span className="px-3 py-1 text-xs font-medium rounded-full bg-emerald-50 text-emerald-700">
                               {assessment.condition}
@@ -268,7 +266,7 @@ const Dashboard = () => {
                               <div className="w-16 h-2 bg-gray-100 rounded-full overflow-hidden mr-2">
                                 <div
                                   className={`h-full rounded-full ${
-                                    assessment.score >= 70
+                                    assessment.score >= 75
                                       ? 'bg-emerald-500'
                                       : assessment.score >= 50
                                       ? 'bg-amber-500'
@@ -281,6 +279,19 @@ const Dashboard = () => {
                                 {assessment.score}
                               </span>
                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                assessment.riskLevel === 'Low'
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : assessment.riskLevel === 'Moderate'
+                                  ? 'bg-amber-50 text-amber-700'
+                                  : 'bg-rose-50 text-rose-700'
+                              }`}
+                            >
+                              {assessment.riskLevel}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-500">{assessment.date}</td>
                         </tr>
