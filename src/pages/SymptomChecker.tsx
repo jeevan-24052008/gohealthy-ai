@@ -743,7 +743,7 @@ function StepReview({ form, onEdit }: { form: FormData; onEdit: (step: number) =
   const { personal, chiefComplaint, symptoms, symptomDetails, lifestyle, medicalHistory } = form;
 
   const fmt = (val: string) => val || '—';
-  const boolLabel = (v: boolean) => (v ? 'Yes' : 'No');
+  
 
   const conditions = ['diabetes', 'hypertension', 'heartDisease', 'asthma', 'thyroid'] as const;
   const activeConditions = conditions.filter((c) => medicalHistory[c]);

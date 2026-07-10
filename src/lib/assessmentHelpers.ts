@@ -1,9 +1,5 @@
 import { supabase } from './supabase';
-import type {
-  DbAssessment,
-  DbRecommendation,
-  DbHealthHistory,
-} from './supabase';
+import type { DbAssessment } from './supabase';
 
 // ─── Types mirroring the SymptomChecker wizard form ──────────────────────────
 
@@ -120,7 +116,6 @@ function symptomSeverityPenalty(details: Record<string, SymptomDetail>, symptoms
 export function calculateHealthScore(form: AssessmentFormData): number {
   const { lifestyle, medicalHistory, symptoms, symptomDetails } = form;
 
-  const base = 100;
   const scores = [
     sleepScore(lifestyle.sleepHours) * 0.20,
     exerciseScore(lifestyle.exerciseDays) * 0.20,
@@ -304,7 +299,7 @@ async function saveAssessmentRow(
   bmi: number,
   healthScore: number,
   riskLevel: string,
-  conditionName: string,
+  _conditionName: string,
   confidenceScore: number,
 ): Promise<string> {
   const { data, error } = await supabase
@@ -453,7 +448,8 @@ export async function submitAssessment(form: AssessmentFormData): Promise<Submit
   const bmi = calculateBMI(height, weight);
   const healthScore = calculateHealthScore(form);
   const riskLevel = getRiskLevel(healthScore);
-  const { condition, confidence } = determineCondition(form.symptoms);
+  const { condition } = determineCondition(form.symptoms);
+  const confidence = 70;
   const recs = generateRecommendations({
     condition,
     healthScore,
@@ -465,7 +461,6 @@ export async function submitAssessment(form: AssessmentFormData): Promise<Submit
   // Sequential writes – each depends on the assessment id
   await saveProfile(form, bmi);
   const assessmentId = await saveAssessmentRow(form, bmi, healthScore, riskLevel, condition, confidence);
-
   // Parallel independent writes
   await Promise.all([
     saveAssessmentSymptoms(assessmentId, form),

@@ -71,7 +71,7 @@ const Results = () => {
 
   if (!state?.symptoms?.length) return null;
 
-  const { condition, confidence, healthScore, bmi, riskLevel, recommendations, symptoms, fullName, age, gender } = state;
+  const { condition, healthScore, bmi, riskLevel, recommendations, symptoms, fullName, age, gender } = state;
 
   const risk = riskColors[riskLevel] ?? riskColors.Moderate;
 
